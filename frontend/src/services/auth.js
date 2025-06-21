@@ -1,5 +1,19 @@
 import { Auth } from '@aws-amplify/auth';
 
+Auth.configure({
+  region: process.env.REACT_APP_AWS_REGION,
+  userPoolId: process.env.REACT_APP_USER_POOL_ID,
+  userPoolWebClientId: process.env.REACT_APP_USER_POOL_CLIENT_ID,
+  authenticationFlowType: 'USER_PASSWORD_AUTH',
+  oauth: {
+    domain: `${process.env.REACT_APP_OAUTH_DOMAIN}.auth.${process.env.REACT_APP_AWS_REGION}.amazoncognito.com`,
+    scope: ['email', 'openid', 'profile'],
+    redirectSignIn: process.env.REACT_APP_OAUTH_REDIRECT_SIGN_IN,
+    redirectSignOut: process.env.REACT_APP_OAUTH_REDIRECT_SIGN_OUT,
+    responseType: 'code'
+  }
+});
+
 export const signUp = async (email, password) => {
   try {
     const { user } = await Auth.signUp({

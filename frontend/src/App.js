@@ -5,26 +5,17 @@ import {
   getFinancials, 
   getNews 
 } from './services/api';
-import { getCurrentUser, signOut } from './services/auth';
 import { 
   getWatchlist, 
   addToWatchlist, 
   removeFromWatchlist 
-} from './services/watchlist'; // Add this import
+} from './services/watchlist';
+import { getCurrentUser, signOut } from './services/auth';
 import Dashboard from './components/Dashboard';
 import StockSearch from './components/StockSearch';
 import AuthModal from './components/AuthModal';
 import Watchlist from './components/Watchlist';
 import './index.css';
-import { Amplify } from '@aws-amplify/core';
-import { API } from '@aws-amplify/api';
-import { Auth } from '@aws-amplify/auth';
-import awsConfig from './aws-exports';
-
-// Initialize Amplify
-Amplify.configure(awsConfig);
-API.configure(awsConfig);
-Auth.configure(awsConfig);
 
 function App() {
   const [selectedStock, setSelectedStock] = useState(null);
@@ -34,6 +25,13 @@ function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [watchlist, setWatchlist] = useState([]);
   const [loadingWatchlist, setLoadingWatchlist] = useState(false);
+
+  // Temporary debug effect - REMOVE AFTER VERIFICATION
+  useEffect(() => {
+    console.log('API URL:', process.env.REACT_APP_API_URL);
+    console.log('User Pool ID:', process.env.REACT_APP_USER_POOL_ID);
+    console.log('Client ID:', process.env.REACT_APP_USER_POOL_CLIENT_ID);
+  }, []);
 
   // Check if user is authenticated on app load
   useEffect(() => {
@@ -50,6 +48,7 @@ function App() {
       if (user) {
         setLoadingWatchlist(true);
         try {
+          // getWatchlist would be implemented to fetch from your API
           const list = await getWatchlist();
           setWatchlist(list);
         } catch (err) {
@@ -115,6 +114,7 @@ function App() {
     }
     
     try {
+      // addToWatchlist would be implemented to call your API
       await addToWatchlist(symbol, name);
       setWatchlist(prev => [...prev, { symbol, name }]);
     } catch (err) {
@@ -124,6 +124,7 @@ function App() {
 
   const handleRemoveFromWatchlist = async (symbol) => {
     try {
+      // removeFromWatchlist would be implemented to call your API
       await removeFromWatchlist(symbol);
       setWatchlist(prev => prev.filter(item => item.symbol !== symbol));
     } catch (err) {
@@ -158,9 +159,9 @@ function App() {
                 </div>
               ) : (
                 <button
-                    onClick={() => setAuthModalOpen(true)}
-                    className="bg-white text-amber-700 py-1 px-3 rounded-md text-sm font-medium hover:bg-amber-50 transition"
-                >
+                  onClick={() => setAuthModalOpen(true)}
+                  className="bg-white text-amber-700 py-1 px-3 rounded-md text-sm font-medium hover:bg-amber-50 transition"
+                  >
                   Sign In
                 </button>
               )}

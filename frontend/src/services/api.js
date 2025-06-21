@@ -2,10 +2,6 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
-  }
 });
 
 // Add response interceptor
@@ -28,16 +24,22 @@ const apiRequest = async (url) => {
   }
 };
 
+
 export const searchSymbols = async (query) => {
-  const data = await apiRequest('/symbols');
-  if (!data) return [];
-  
-  if (!query) return data;
-  
-  return data.filter(item => 
-    item.symbol.includes(query.toUpperCase()) || 
-    (item.name && item.name.toLowerCase().includes(query.toLowerCase()))
-  );
+  try {
+    const response = await api.get('/symbols');
+    const data = response.data || [];
+    
+    if (!query) return data;
+    
+    return data.filter(item => 
+      item.symbol.includes(query.toUpperCase()) || 
+      (item.name && item.name.toLowerCase().includes(query.toLowerCase()))
+    );
+  } catch (error) {
+    console.error('Error searching symbols:', error);
+    return [];
+  }
 };
 
 export const getStockMetrics = async (symbol) => {

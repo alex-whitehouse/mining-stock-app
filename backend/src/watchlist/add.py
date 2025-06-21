@@ -3,41 +3,54 @@ import boto3
 import os
 import jwt
 from datetime import datetime
+from jose import jwk, jwt
+from jose.utils import base64url_decode
+import requests
 
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(os.environ['WATCHLIST_TABLE'])
+region = os.environ['AWS_REGION']
 user_pool_id = os.environ['USER_POOL_ID']
-region = os.environ['COGNITO_REGION']
+app_client_id = os.environ['APP_CLIENT_ID']
 
-def get_user_id_from_token(token):
+def verify_token(token):
     try:
         jwks_url = f'https://cognito-idp.{region}.amazonaws.com/{user_pool_id}/.well-known/jwks.json'
-        jwks_client = jwt.PyJWKClient(jwks_url)
-        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        jwks = requests.get(jwks_url).json()['keys']
         
-        decoded = jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=["RS256"],
-            audience=os.environ['USER_POOL_CLIENT_ID'],
-            options={"verify_exp": True}
-        )
-        return decoded['sub']
+        headers = jwt.get_unverified_headers(token)
+        kid = headers['kid']
+        
+        key = next(k for k in jwks if k['kid'] == kid)
+        public_key = jwk.construct(key)
+        
+        message, encoded_signature = token.rsplit('.', 1)
+        decoded_signature = base64url_decode(encoded_signature.encode('utf-8'))
+        
+        if not public_key.verify(message.encode('utf-8'), decoded_signature):
+            return None
+            
+        claims = jwt.get_unverified_claims(token)
+        
+        if claims['aud'] != app_client_id:
+            return None
+            
+        return claims['sub']
     except Exception as e:
-        print(f"Token validation error: {str(e)}")
+        print(f"Token verification error: {str(e)}")
         return None
 
 def lambda_handler(event, context):
     try:
-        # Get token from Authorization header
+        # Get token from headers
         token = event['headers'].get('Authorization', '').split(' ')[-1]
         if not token:
             return {
                 'statusCode': 401,
-                'body': json.dumps({'message': 'Authorization token missing'})
+                'body': json.dumps({'message': 'Missing token'})
             }
         
-        user_id = get_user_id_from_token(token)
+        user_id = verify_token(token)
         if not user_id:
             return {
                 'statusCode': 401,
@@ -67,10 +80,8 @@ def lambda_handler(event, context):
             'statusCode': 200,
             'body': json.dumps({'message': 'Added to watchlist'})
         }
-    
     except Exception as e:
-        print(f"Error: {str(e)}")
         return {
             'statusCode': 500,
-            'body': json.dumps({'message': 'Internal server error'})
+            'body': json.dumps({'message': str(e)})
         }

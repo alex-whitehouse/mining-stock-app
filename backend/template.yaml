@@ -20,6 +20,7 @@ Globals:
     Runtime: python3.9
 
 Resources:
+  # DynamoDB Tables
   SymbolsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -106,11 +107,15 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref WatchlistTable
+        - Statement:
+            - Effect: Allow
+              Action: 
+                - cognito-idp:AdminGetUser
+              Resource: !GetAtt UserPool.Arn
       Environment:
         Variables:
           WATCHLIST_TABLE: !Ref WatchlistTable
           USER_POOL_ID: !Ref UserPool
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
           COGNITO_REGION: !Ref AWS::Region
       Events:
         Api:
@@ -128,11 +133,15 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref WatchlistTable
+        - Statement:
+            - Effect: Allow
+              Action: 
+                - cognito-idp:AdminGetUser
+              Resource: !GetAtt UserPool.Arn
       Environment:
         Variables:
           WATCHLIST_TABLE: !Ref WatchlistTable
           USER_POOL_ID: !Ref UserPool
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
           COGNITO_REGION: !Ref AWS::Region
       Events:
         Api:
@@ -150,11 +159,15 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref WatchlistTable
+        - Statement:
+            - Effect: Allow
+              Action: 
+                - cognito-idp:AdminGetUser
+              Resource: !GetAtt UserPool.Arn
       Environment:
         Variables:
           WATCHLIST_TABLE: !Ref WatchlistTable
           USER_POOL_ID: !Ref UserPool
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
           COGNITO_REGION: !Ref AWS::Region
       Events:
         Api:
@@ -162,37 +175,6 @@ Resources:
           Properties:
             Path: /watchlist
             Method: DELETE
-                  
-  # IAM Role
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: [lambda.amazonaws.com]
-            Action: ['sts:AssumeRole']
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: DynamoDBAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:PutItem
-                  - dynamodb:GetItem
-                  - dynamodb:UpdateItem
-                  - dynamodb:Scan
-                  - dynamodb:Query
-                  - dynamodb:DeleteItem
-                Resource: 
-                  - !GetAtt SymbolsTable.Arn
-                  - !GetAtt MetricsTable.Arn
-                  - !GetAtt WatchlistTable.Arn
 
   # Lambda Functions
   SymbolIngestFunction:
@@ -201,11 +183,15 @@ Resources:
       FunctionName: !Sub SymbolIngest-${Environment}
       CodeUri: src/symbol_ingest/
       Handler: app.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SymbolsTable
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub /mining-app/${Environment}/finnhub-api-key
       Environment:
         Variables:
-          FINNHUB_API_KEY: !Ref FinnhubApiKey
           SYMBOLS_TABLE: !Ref SymbolsTable
+          ENVIRONMENT: !Ref Environment
       Events:
         DailySchedule:
           Type: Schedule
@@ -218,12 +204,18 @@ Resources:
       FunctionName: !Sub MetricsProcessor-${Environment}
       CodeUri: src/metrics_processor/
       Handler: app.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MetricsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref SymbolsTable
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub /mining-app/${Environment}/finnhub-api-key
       Environment:
         Variables:
-          FINNHUB_API_KEY: !Ref FinnhubApiKey
           SYMBOLS_TABLE: !Ref SymbolsTable
           METRICS_TABLE: !Ref MetricsTable
+          ENVIRONMENT: !Ref Environment
 
   DataApiFunction:
     Type: AWS::Serverless::Function
@@ -231,14 +223,16 @@ Resources:
       FunctionName: !Sub DataApi-${Environment}
       CodeUri: src/data_api/
       Handler: app.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref SymbolsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref MetricsTable
       Environment:
         Variables:
           SYMBOLS_TABLE: !Ref SymbolsTable
           METRICS_TABLE: !Ref MetricsTable
           ENVIRONMENT: !Ref Environment
-          USER_POOL_ID: !Ref UserPool
-          COGNITO_REGION: !Ref AWS::Region
       Events:
         Api:
           Type: HttpApi

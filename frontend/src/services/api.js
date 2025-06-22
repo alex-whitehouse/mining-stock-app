@@ -27,17 +27,11 @@ const apiRequest = async (url) => {
 
 export const searchSymbols = async (query) => {
   try {
-    const response = await api.get('/symbols');
-    const data = response.data || [];
-    
-    if (!query) return data;
-    
-    // Case-insensitive search
-    return data.filter(item => {
-      const symbolMatch = item.symbol?.toLowerCase().includes(query.toLowerCase());
-      const nameMatch = item.name?.toLowerCase().includes(query.toLowerCase());
-      return symbolMatch || nameMatch;
+    // Send query to backend for server-side filtering
+    const response = await api.get('/symbols', {
+      params: { query }
     });
+    return response.data || [];
   } catch (error) {
     console.error('Error searching symbols:', error);
     return [];
@@ -48,22 +42,12 @@ export const getStockMetrics = async (symbol) => {
   return apiRequest(`/metrics/${symbol}`);
 };
 
+export const getCompanyOverview = async (symbol) => {
+  return apiRequest(`/overview/${symbol}`);
+};
+
 export const getFinancials = async (symbol) => {
-  // In a real app, this would call your financials endpoint
-  return {
-    quarterly: [
-      { period: 'Q1 2023', revenue: 45.2, costs: 32.1, net: 8.7 },
-      { period: 'Q2 2023', revenue: 48.7, costs: 33.8, net: 9.2 },
-      { period: 'Q3 2023', revenue: 52.1, costs: 35.4, net: 10.5 },
-      { period: 'Q4 2023', revenue: 55.6, costs: 37.2, net: 11.8 },
-    ],
-    annual: [
-      { year: 2020, revenue: 162.4, net: 28.5 },
-      { year: 2021, revenue: 178.9, net: 32.1 },
-      { year: 2022, revenue: 195.3, net: 38.7 },
-      { year: 2023, revenue: 217.6, net: 46.3 },
-    ]
-  };
+  return apiRequest(`/financials/${symbol}`);
 };
 
 export const getNews = async (symbol) => {

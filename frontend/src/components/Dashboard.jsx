@@ -76,6 +76,65 @@ const Dashboard = ({ stock, watchlist = [], onAddToWatchlist, onRemoveFromWatchl
         </div>
       </div>
       
+      {stock.overview && (
+        <div className="mt-6 bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Company Overview</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2">
+              <h4 className="font-medium text-gray-700 mb-2">Description</h4>
+              <p className="text-gray-600 text-sm">
+                {stock.overview.Description || 'No description available'}
+              </p>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium text-gray-700">Sector</h4>
+                <p className="text-gray-900">{stock.overview.Sector || 'N/A'}</p>
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-700">Industry</h4>
+                <p className="text-gray-900">{stock.overview.Industry || 'N/A'}</p>
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-700">Market Cap</h4>
+                <p className="text-gray-900">{stock.overview.MarketCapitalization || 'N/A'}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <h4 className="font-medium text-amber-800">PE Ratio</h4>
+              <div className="mt-2 text-xl font-bold text-amber-700">
+                {stock.overview.PERatio || 'N/A'}
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-medium text-blue-800">Dividend Yield</h4>
+              <div className="mt-2 text-xl font-bold text-blue-700">
+                {stock.overview.DividendYield || 'N/A'}
+              </div>
+            </div>
+            
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <h4 className="font-medium text-green-800">52-Week High</h4>
+              <div className="mt-2 text-xl font-bold text-green-700">
+                {stock.overview['52WeekHigh'] || 'N/A'}
+              </div>
+            </div>
+            
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <h4 className="font-medium text-purple-800">52-Week Low</h4>
+              <div className="mt-2 text-xl font-bold text-purple-700">
+                {stock.overview['52WeekLow'] || 'N/A'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="mt-6 bg-white shadow rounded-lg p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Value Analysis</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

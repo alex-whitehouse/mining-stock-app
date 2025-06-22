@@ -1,46 +1,9 @@
-'''import os
-import boto3
-import requests
-
-dynamodb = boto3.resource('dynamodb')
-table = dynamodb.Table(os.environ['SYMBOLS_TABLE'])
-
-def lambda_handler(event, context):
-    API_KEY = os.environ['FINNHUB_API_KEY']
-    
-    try:
-        # Get TSXV stocks
-        response = requests.get(
-            f'https://finnhub.io/api/v1/stock/symbol?exchange=V&token={API_KEY}'
-        )
-        response.raise_for_status()
-        stocks = response.json()
-        
-        # Filter and save to DynamoDB
-        with table.batch_writer() as batch:
-            for stock in stocks:
-                if stock.get('type') == 'Common Stock':
-                    batch.put_item(Item={
-                        'symbol': stock['symbol'],
-                        'exchange': stock.get('exchange', 'V'),
-                        'name': stock.get('description', ''),
-                        'currency': stock.get('currency', ''),
-                        'type': stock.get('type', '')
-                    })
-                    
-        return {'status': 'success', 'count': len(stocks)}
-    
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        return {'status': 'error', 'message': str(e)}
-
-        '''
-
-# src/symbol_ingest/app.py
 import os
 import boto3
-from datetime import datetime
+import requests
+import json
 import logging
+from datetime import datetime
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -48,26 +11,59 @@ logger.setLevel(logging.INFO)
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(os.environ['SYMBOLS_TABLE'])
 
+# Predefined list of mining stock symbols
+MINING_SYMBOLS = [
+    "GOLD", "NEM", "AEM", "KL", "WPM", "AG", "PAAS", "EXK", "HL", "MUX",
+    "CDE", "FSM", "SAND", "SSRM", "OR", "RGLD", "SA", "TAHO", "IAG", "GFI"
+]
+
 def lambda_handler(event, context):
     try:
-        # Sample mining stocks
-        sample_symbols = [
-            {'symbol': 'ABR', 'exchange': 'TSXV', 'name': 'Arbor Metals Corp.', 'currency': 'CAD'},
-            {'symbol': 'GSS', 'exchange': 'NYSE', 'name': 'Golden Star Resources', 'currency': 'USD'},
-            {'symbol': 'NG', 'exchange': 'TSX', 'name': 'NovaGold Resources Inc.', 'currency': 'CAD'},
-            {'symbol': 'K', 'exchange': 'NYSE', 'name': 'Kinross Gold Corporation', 'currency': 'USD'},
-            {'symbol': 'AEM', 'exchange': 'NYSE', 'name': 'Agnico Eagle Mines', 'currency': 'USD'},
-        ]
+        API_KEY = os.environ['ALPHA_VANTAGE_API_KEY']
+        items_to_write = []
         
+        for symbol in MINING_SYMBOLS:
+            # Get company overview
+            overview_url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={symbol}&apikey={API_KEY}"
+            response = requests.get(overview_url)
+            data = response.json()
+            
+            # Skip if no data
+            if not data or 'Symbol' not in data:
+                continue
+                
+            # Create item with lowercase symbol for search
+            item = {
+                'symbol': symbol,
+                'symbol_lower': symbol.lower(),
+                'exchange': data.get('Exchange', ''),
+                'name': data.get('Name', ''),
+                'sector': data.get('Sector', ''),
+                'industry': data.get('Industry', ''),
+                'description': data.get('Description', ''),
+                'last_updated': datetime.utcnow().isoformat()
+            }
+            items_to_write.append(item)
+        
+        # Write items to DynamoDB
         with table.batch_writer() as batch:
-            for symbol in sample_symbols:
-                batch.put_item(Item={
-                    **symbol,
-                    'type': 'Common Stock',
-                    'last_updated': datetime.utcnow().isoformat()
-                })
+            for item in items_to_write:
+                try:
+                    batch.put_item(Item=item)
+                    logger.info(f"Successfully wrote item: {json.dumps(item)}")
+                except Exception as e:
+                    logger.error(f"Failed to write item: {json.dumps(item)}")
+                    logger.error(f"Error details: {str(e)}")
+                    continue
         
-        return {'statusCode': 200, 'body': 'Sample symbols inserted'}
+        return {
+            'statusCode': 200,
+            'body': f'Successfully ingested {len(items_to_write)} stocks'
+        }
+        
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return {'statusCode': 500, 'body': str(e)}
+        logger.error(f"Symbol ingest failed: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': f'Symbol ingest failed: {str(e)}'
+        }

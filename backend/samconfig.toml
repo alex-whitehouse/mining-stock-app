@@ -6,5 +6,5 @@ resolve_s3 = true
 s3_prefix = "mining-stock-app"
 region = "eu-west-2"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=\"dev\""
+parameter_overrides = "Environment=\"dev\" AlphaVantageApiKey=\"HC5LJW21H36WULAK\""
 image_repositories = []

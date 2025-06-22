@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  searchSymbols, 
   getStockMetrics, 
   getFinancials, 
-  getNews 
+  getNews,
+  getCompanyOverview
 } from './services/api';
 import { 
   getWatchlist, 
@@ -73,21 +73,24 @@ function App() {
         info: stock,
         metrics: null,
         financials: null,
-        news: null
+        news: null,
+        overview: null
       });
       
       // Fetch all data in parallel
-      const [metrics, financials, news] = await Promise.all([
+      const [metrics, financials, news, overview] = await Promise.all([
         getStockMetrics(stock.symbol),
         getFinancials(stock.symbol),
-        getNews(stock.symbol)
+        getNews(stock.symbol),
+        getCompanyOverview(stock.symbol)
       ]);
       
       setSelectedStock({
         info: stock,
         metrics,
         financials,
-        news
+        news,
+        overview
       });
     } catch (err) {
       setError('Failed to load stock data. Please try again.');

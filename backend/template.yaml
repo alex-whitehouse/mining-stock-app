@@ -13,6 +13,11 @@ Parameters:
     NoEcho: true
     Description: Finnhub API key
 
+  AlphaVantageApiKey:
+    Type: String
+    NoEcho: true
+    Description: Alpha Vantage API key
+
 Globals:
   Function:
     Timeout: 30
@@ -30,12 +35,23 @@ Resources:
           AttributeType: S
         - AttributeName: exchange
           AttributeType: S
+        - AttributeName: name
+          AttributeType: S
       KeySchema:
         - AttributeName: symbol
           KeyType: HASH
         - AttributeName: exchange
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - IndexName: symbol-name-index
+          KeySchema:
+            - AttributeName: symbol
+              KeyType: HASH
+            - AttributeName: name
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
 
   MetricsTable:
     Type: AWS::DynamoDB::Table
@@ -97,6 +113,20 @@ Resources:
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
 
+  CompanyOverviewTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub CompanyOverview-${Environment}
+      AttributeDefinitions:
+        - AttributeName: symbol
+          AttributeType: S
+      KeySchema:
+        - AttributeName: symbol
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiration_time
+        Enabled: true
+      BillingMode: PAY_PER_REQUEST
   # Watchlist Lambda Functions
   WatchlistAddFunction:
     Type: AWS::Serverless::Function
@@ -107,9 +137,16 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref WatchlistTable
+        - Statement:
+            - Effect: Allow
+              Action: 
+                - cognito-idp:AdminGetUser
+              Resource: !GetAtt UserPool.Arn
       Environment:
         Variables:
           WATCHLIST_TABLE: !Ref WatchlistTable
+          USER_POOL_ID: !Ref UserPool
+          COGNITO_REGION: !Ref AWS::Region
       Events:
         Api:
           Type: HttpApi
@@ -126,9 +163,16 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref WatchlistTable
+        - Statement:
+            - Effect: Allow
+              Action: 
+                - cognito-idp:AdminGetUser
+              Resource: !GetAtt UserPool.Arn
       Environment:
         Variables:
           WATCHLIST_TABLE: !Ref WatchlistTable
+          USER_POOL_ID: !Ref UserPool
+          COGNITO_REGION: !Ref AWS::Region
       Events:
         Api:
           Type: HttpApi
@@ -145,9 +189,16 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref WatchlistTable
+        - Statement:
+            - Effect: Allow
+              Action: 
+                - cognito-idp:AdminGetUser
+              Resource: !GetAtt UserPool.Arn
       Environment:
         Variables:
           WATCHLIST_TABLE: !Ref WatchlistTable
+          USER_POOL_ID: !Ref UserPool
+          COGNITO_REGION: !Ref AWS::Region
       Events:
         Api:
           Type: HttpApi
@@ -155,7 +206,21 @@ Resources:
             Path: /watchlist
             Method: DELETE
 
-  # Symbol Ingest Function
+  # Add OPTIONS method handlers for CORS
+  WatchlistOptionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub WatchlistOptions-${Environment}
+      CodeUri: src/watchlist/
+      Handler: options.lambda_handler
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            Path: /watchlist
+            Method: OPTIONS
+
+  # Lambda Functions
   SymbolIngestFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -165,19 +230,17 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref SymbolsTable
-        - SSMParameterReadPolicy:
-            ParameterName: !Sub /mining-app/${Environment}/finnhub-api-key
       Environment:
         Variables:
           SYMBOLS_TABLE: !Ref SymbolsTable
           ENVIRONMENT: !Ref Environment
+          ALPHA_VANTAGE_API_KEY: !Ref AlphaVantageApiKey
       Events:
         DailySchedule:
           Type: Schedule
           Properties:
             Schedule: cron(30 14 ? * MON-FRI *)  # 9:30AM EST
 
-  # Metrics Processor Function
   MetricsProcessorFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -191,36 +254,48 @@ Resources:
             TableName: !Ref SymbolsTable
         - SSMParameterReadPolicy:
             ParameterName: !Sub /mining-app/${Environment}/finnhub-api-key
-      Environment:
-        Variables:
-          SYMBOLS_TABLE: !Ref SymbolsTable
-          METRICS_TABLE: !Ref MetricsTable
-          ENVIRONMENT: !Ref Environment
 
-  # Data API Function
   DataApiFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub DataApi-${Environment}
       CodeUri: src/data_api/
       Handler: app.lambda_handler
+      Environment:
+        Variables:
+          SYMBOLS_TABLE: !Ref SymbolsTable
+          METRICS_TABLE: !Ref MetricsTable
+          COMPANY_OVERVIEW_TABLE: !Ref CompanyOverviewTable
+          ALPHA_VANTAGE_API_KEY: !Ref AlphaVantageApiKey
+          ENVIRONMENT: !Ref Environment
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref SymbolsTable
         - DynamoDBReadPolicy:
             TableName: !Ref MetricsTable
-      Environment:
-        Variables:
-          SYMBOLS_TABLE: !Ref SymbolsTable
-          METRICS_TABLE: !Ref MetricsTable
-          ENVIRONMENT: !Ref Environment
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CompanyOverviewTable
       Events:
-        Proxy:
+        SymbolsRoute:
+          Type: HttpApi
+          Properties:
+            Path: /symbols
+            Method: GET
+        MetricsRoute:
+          Type: HttpApi
+          Properties:
+            Path: /metrics/{symbol}
+            Method: GET
+        OverviewRoute:
+          Type: HttpApi
+          Properties:
+            Path: /overview/{symbol}
+            Method: GET
+        ProxyRoute:
           Type: HttpApi
           Properties:
             Path: /{proxy+}
             Method: ANY
-
   # API Gateway
   DashboardApi:
     Type: AWS::Serverless::HttpApi
@@ -239,7 +314,11 @@ Resources:
 Outputs:
   DashboardEndpoint:
     Description: API Gateway Endpoint
-    Value: !Sub "https://${DashboardApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+    Value: !Sub 
+      - "https://${ApiId}.execute-api.${Region}.amazonaws.com/${Stage}"
+      - ApiId: !Ref DashboardApi
+        Region: !Ref AWS::Region
+        Stage: !Ref Environment
   UserPoolId:
     Description: Cognito User Pool ID
     Value: !Ref UserPool

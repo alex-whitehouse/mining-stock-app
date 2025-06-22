@@ -107,16 +107,9 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref WatchlistTable
-        - Statement:
-            - Effect: Allow
-              Action: 
-                - cognito-idp:AdminGetUser
-              Resource: !GetAtt UserPool.Arn
       Environment:
         Variables:
           WATCHLIST_TABLE: !Ref WatchlistTable
-          USER_POOL_ID: !Ref UserPool
-          COGNITO_REGION: !Ref AWS::Region
       Events:
         Api:
           Type: HttpApi
@@ -133,16 +126,9 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref WatchlistTable
-        - Statement:
-            - Effect: Allow
-              Action: 
-                - cognito-idp:AdminGetUser
-              Resource: !GetAtt UserPool.Arn
       Environment:
         Variables:
           WATCHLIST_TABLE: !Ref WatchlistTable
-          USER_POOL_ID: !Ref UserPool
-          COGNITO_REGION: !Ref AWS::Region
       Events:
         Api:
           Type: HttpApi
@@ -159,16 +145,9 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref WatchlistTable
-        - Statement:
-            - Effect: Allow
-              Action: 
-                - cognito-idp:AdminGetUser
-              Resource: !GetAtt UserPool.Arn
       Environment:
         Variables:
           WATCHLIST_TABLE: !Ref WatchlistTable
-          USER_POOL_ID: !Ref UserPool
-          COGNITO_REGION: !Ref AWS::Region
       Events:
         Api:
           Type: HttpApi
@@ -176,7 +155,7 @@ Resources:
             Path: /watchlist
             Method: DELETE
 
-  # Lambda Functions
+  # Symbol Ingest Function
   SymbolIngestFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -198,6 +177,7 @@ Resources:
           Properties:
             Schedule: cron(30 14 ? * MON-FRI *)  # 9:30AM EST
 
+  # Metrics Processor Function
   MetricsProcessorFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -217,6 +197,7 @@ Resources:
           METRICS_TABLE: !Ref MetricsTable
           ENVIRONMENT: !Ref Environment
 
+  # Data API Function
   DataApiFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -234,7 +215,7 @@ Resources:
           METRICS_TABLE: !Ref MetricsTable
           ENVIRONMENT: !Ref Environment
       Events:
-        Api:
+        Proxy:
           Type: HttpApi
           Properties:
             Path: /{proxy+}

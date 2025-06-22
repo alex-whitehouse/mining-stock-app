@@ -36,48 +36,38 @@ def lambda_handler(event, context):
 
         '''
 
+# src/symbol_ingest/app.py
 import os
 import boto3
-import requests
 from datetime import datetime
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 dynamodb = boto3.resource('dynamodb')
-symbols_table = dynamodb.Table(os.environ['SYMBOLS_TABLE'])
+table = dynamodb.Table(os.environ['SYMBOLS_TABLE'])
 
 def lambda_handler(event, context):
-    # For testing, add sample symbols
-    sample_symbols = [
-        {
-            'symbol': 'ABR',
-            'exchange': 'TSXV',
-            'name': 'Arbor Metals Corp.',
-            'currency': 'CAD',
-            'type': 'Common Stock',
-            'last_updated': datetime.utcnow().isoformat()
-        },
-        {
-            'symbol': 'NG',
-            'exchange': 'TSX',
-            'name': 'NovaGold Resources Inc.',
-            'currency': 'CAD',
-            'type': 'Common Stock',
-            'last_updated': datetime.utcnow().isoformat()
-        },
-        {
-            'symbol': 'K',
-            'exchange': 'NYSE',
-            'name': 'Kinross Gold Corporation',
-            'currency': 'USD',
-            'type': 'Common Stock',
-            'last_updated': datetime.utcnow().isoformat()
-        }
-    ]
-    
-    with symbols_table.batch_writer() as batch:
-        for symbol in sample_symbols:
-            batch.put_item(Item=symbol)
-    
-    return {
-        'statusCode': 200,
-        'body': f"Inserted sample symbols"
-    }
+    try:
+        # Sample mining stocks
+        sample_symbols = [
+            {'symbol': 'ABR', 'exchange': 'TSXV', 'name': 'Arbor Metals Corp.', 'currency': 'CAD'},
+            {'symbol': 'GSS', 'exchange': 'NYSE', 'name': 'Golden Star Resources', 'currency': 'USD'},
+            {'symbol': 'NG', 'exchange': 'TSX', 'name': 'NovaGold Resources Inc.', 'currency': 'CAD'},
+            {'symbol': 'K', 'exchange': 'NYSE', 'name': 'Kinross Gold Corporation', 'currency': 'USD'},
+            {'symbol': 'AEM', 'exchange': 'NYSE', 'name': 'Agnico Eagle Mines', 'currency': 'USD'},
+        ]
+        
+        with table.batch_writer() as batch:
+            for symbol in sample_symbols:
+                batch.put_item(Item={
+                    **symbol,
+                    'type': 'Common Stock',
+                    'last_updated': datetime.utcnow().isoformat()
+                })
+        
+        return {'statusCode': 200, 'body': 'Sample symbols inserted'}
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        return {'statusCode': 500, 'body': str(e)}

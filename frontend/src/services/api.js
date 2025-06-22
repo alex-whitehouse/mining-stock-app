@@ -32,10 +32,12 @@ export const searchSymbols = async (query) => {
     
     if (!query) return data;
     
-    return data.filter(item => 
-      item.symbol.includes(query.toUpperCase()) || 
-      (item.name && item.name.toLowerCase().includes(query.toLowerCase()))
-    );
+    // Case-insensitive search
+    return data.filter(item => {
+      const symbolMatch = item.symbol?.toLowerCase().includes(query.toLowerCase());
+      const nameMatch = item.name?.toLowerCase().includes(query.toLowerCase());
+      return symbolMatch || nameMatch;
+    });
   } catch (error) {
     console.error('Error searching symbols:', error);
     return [];

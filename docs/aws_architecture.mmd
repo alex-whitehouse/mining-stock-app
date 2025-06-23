@@ -1,0 +1,75 @@
+graph TD
+    subgraph AWS Cloud
+        subgraph API Gateway
+            AG[Dashboard API]
+        end
+
+        subgraph Cognito
+            UP[User Pool]
+            UC[User Pool Client]
+        end
+
+        subgraph DynamoDB
+            ST[Symbols Table]
+            MT[Metrics Table]
+            WT[Watchlist Table]
+            COT[Company Overview Table]
+        end
+
+        subgraph Lambda Functions
+            SI[Symbol Ingest]
+            MP[Metrics Processor]
+            DA[Data API]
+            WA[Watchlist Add]
+            WG[Watchlist Get]
+            WR[Watchlist Remove]
+        end
+
+        subgraph External Services
+            AV[Alpha Vantage API]
+            FH[Finnhub API]
+        end
+
+        AG --> DA
+        AG --> WA
+        AG --> WG
+        AG --> WR
+
+        DA --> ST
+        DA --> MT
+        DA --> COT
+        DA --> AV
+
+        SI --> ST
+        SI --> AV
+        SI -->|Schedule| CloudWatch[CloudWatch Events]
+
+        MP --> ST
+        MP --> MT
+        MP --> FH
+
+        WA --> WT
+        WA --> UP
+
+        WG --> WT
+        WG --> UP
+
+        WR --> WT
+        WR --> UP
+
+        Frontend[React Frontend] --> AG
+        Frontend --> UP
+        Frontend --> UC
+    end
+
+    classDef service fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef db fill:#cfc,stroke:#333,stroke-width:2px;
+    classDef lambda fill:#ffc,stroke:#333,stroke-width:2px;
+    classDef external fill:#fcc,stroke:#333,stroke-width:2px;
+    classDef frontend fill:#cff,stroke:#333,stroke-width:2px;
+
+    class AG,UP,UC service;
+    class ST,MT,WT,COT db;
+    class SI,MP,DA,WA,WG,WR lambda;
+    class AV,FH external;
+    class Frontend frontend;

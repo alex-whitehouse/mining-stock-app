@@ -45,7 +45,8 @@ def lambda_handler(event, context):
                 'sector': data.get('Sector', ''),
                 'industry': data.get('Industry', ''),
                 'description': data.get('Description', ''),
-                'last_updated': datetime.utcnow().isoformat()
+                'last_updated': int(datetime.utcnow().timestamp()),
+                'stock_type': 'precached'
             }
             items_to_write.append(item)
         

@@ -156,14 +156,33 @@ def lambda_handler(event, context):
                 }
             }
         
-        # Handle GET /financials/{symbol} (Alpha Vantage endpoint)
+        # Handle GET /financials/{symbol} (Alpha Vantage endpoint with caching)
         if path.startswith('/financials/') and method == 'GET':
             symbol = path.split('/')[-1]
+            current_time_sec = int(time.time())
+            cache_validity_sec = 24 * 3600  # 1 day
             
-            # Get API key from environment
+            # Check cache first
+            try:
+                response = metrics_table.get_item(Key={'symbol': symbol})
+                item = response.get('Item')
+                
+                # Return cached data if fresh
+                if item and current_time_sec - item.get('last_updated', 0) < cache_validity_sec:
+                    return {
+                        'statusCode': 200,
+                        'body': json.dumps(item['data']),
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        }
+                    }
+            except Exception as e:
+                logger.error(f"Cache lookup failed: {str(e)}")
+                item = None
+            
+            # If cache miss or stale, call API
             API_KEY = os.environ['ALPHA_VANTAGE_API_KEY']
-            
-            # Call Alpha Vantage APIs
             overview_url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={symbol}&apikey={API_KEY}"
             time_series_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={API_KEY}"
             
@@ -172,6 +191,17 @@ def lambda_handler(event, context):
                 time_series_res = requests.get(time_series_url)
                 
                 if overview_res.status_code != 200 or time_series_res.status_code != 200:
+                    # Return stale data if available
+                    if item:
+                        logger.warn(f"API failed but returning stale financials for {symbol}")
+                        return {
+                            'statusCode': 200,
+                            'body': json.dumps(item['data']),
+                            'headers': {
+                                'Content-Type': 'application/json',
+                                'Access-Control-Allow-Origin': '*'
+                            }
+                        }
                     return {
                         'statusCode': 500,
                         'body': json.dumps({'error': 'Alpha Vantage API error'})
@@ -196,6 +226,18 @@ def lambda_handler(event, context):
                     'timeSeries': time_series_data
                 }
                 
+                # Save to cache
+                try:
+                    metrics_table.put_item(
+                        Item={
+                            'symbol': symbol,
+                            'data': financials,
+                            'last_updated': current_time_sec
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to cache financials: {str(e)}")
+                
                 return {
                     'statusCode': 200,
                     'body': json.dumps(financials),
@@ -207,23 +249,57 @@ def lambda_handler(event, context):
                 
             except Exception as e:
                 logger.error(f"Financial data fetch failed: {str(e)}")
+                # Return stale data if available
+                if item:
+                    logger.warn(f"Returning stale financials for {symbol} after API failure")
+                    return {
+                        'statusCode': 200,
+                        'body': json.dumps(item['data']),
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        }
+                    }
                 return {
                     'statusCode': 500,
                     'body': json.dumps({'error': str(e)})
                 }
                 
-        # Handle GET /overview/{symbol} (Alpha Vantage Company Overview with caching)
+        # Handle GET /overview/{symbol} (Alpha Vantage Company Overview with permanent caching)
         if path.startswith('/overview/') and method == 'GET':
             symbol = path.split('/')[-1]
             current_time_sec = int(time.time())
+            cache_validity_sec = 7 * 24 * 3600  # 7 days
             
             try:
                 # Check cache first
                 response = company_overview_table.get_item(Key={'symbol': symbol})
-                if 'Item' in response:
-                    item = response['Item']
-                    # Check if cache is still valid
-                    if item.get('expiration_time', 0) > current_time_sec:
+                item = response.get('Item')
+                
+                # Return cached data if fresh
+                if item and current_time_sec - item.get('last_updated', 0) < cache_validity_sec:
+                    return {
+                        'statusCode': 200,
+                        'body': json.dumps(item['data']),
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        }
+                    }
+            except Exception as e:
+                logger.error(f"Cache lookup failed: {str(e)}")
+                item = None
+            
+            # If cache miss or stale, call API
+            API_KEY = os.environ['ALPHA_VANTAGE_API_KEY']
+            url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={symbol}&apikey={API_KEY}"
+            
+            try:
+                res = requests.get(url)
+                if res.status_code != 200:
+                    # Return stale data if available
+                    if item:
+                        logger.warn(f"API failed but returning stale data for {symbol}")
                         return {
                             'statusCode': 200,
                             'body': json.dumps(item['data']),
@@ -232,16 +308,6 @@ def lambda_handler(event, context):
                                 'Access-Control-Allow-Origin': '*'
                             }
                         }
-            except Exception as e:
-                logger.error(f"Cache lookup failed: {str(e)}")
-            
-            # If cache miss or expired, call API
-            API_KEY = os.environ['ALPHA_VANTAGE_API_KEY']
-            url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={symbol}&apikey={API_KEY}"
-            
-            try:
-                res = requests.get(url)
-                if res.status_code != 200:
                     return {
                         'statusCode': res.status_code,
                         'body': json.dumps({'error': 'Alpha Vantage API error'})
@@ -249,14 +315,13 @@ def lambda_handler(event, context):
                 
                 data = res.json()
                 
-                # Save to cache with 24h TTL
+                # Save to permanent cache
                 try:
-                    expiration_time = current_time_sec + 24 * 3600  # 24 hours
                     company_overview_table.put_item(
                         Item={
                             'symbol': symbol,
                             'data': data,
-                            'expiration_time': expiration_time
+                            'last_updated': current_time_sec
                         }
                     )
                 except Exception as e:
@@ -273,6 +338,17 @@ def lambda_handler(event, context):
                 
             except Exception as e:
                 logger.error(f"API call failed: {str(e)}")
+                # Return stale data if available
+                if item:
+                    logger.warn(f"Returning stale data for {symbol} after API failure")
+                    return {
+                        'statusCode': 200,
+                        'body': json.dumps(item['data']),
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        }
+                    }
                 return {
                     'statusCode': 500,
                     'body': json.dumps({'error': str(e)})

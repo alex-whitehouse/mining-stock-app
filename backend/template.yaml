@@ -37,6 +37,8 @@ Resources:
           AttributeType: S
         - AttributeName: name
           AttributeType: S
+        - AttributeName: symbol_lower
+          AttributeType: S
       KeySchema:
         - AttributeName: symbol
           KeyType: HASH
@@ -50,6 +52,12 @@ Resources:
               KeyType: HASH
             - AttributeName: name
               KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: symbol-lower-index
+          KeySchema:
+            - AttributeName: symbol_lower
+              KeyType: HASH
           Projection:
             ProjectionType: ALL
 
@@ -123,9 +131,6 @@ Resources:
       KeySchema:
         - AttributeName: symbol
           KeyType: HASH
-      TimeToLiveSpecification:
-        AttributeName: expiration_time
-        Enabled: true
       BillingMode: PAY_PER_REQUEST
   # Watchlist Lambda Functions
   WatchlistAddFunction:

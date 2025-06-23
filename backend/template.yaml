@@ -257,6 +257,8 @@ Resources:
 
   DataApiFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.9
     Properties:
       FunctionName: !Sub DataApi-${Environment}
       CodeUri: src/data_api/

@@ -11,18 +11,22 @@ logger.setLevel(logging.INFO)
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(os.environ['SYMBOLS_TABLE'])
 
-# Predefined list of mining stock symbols
-MINING_SYMBOLS = [
-    "GOLD", "NEM", "AEM", "KL", "WPM", "AG", "PAAS", "EXK", "HL", "MUX",
-    "CDE", "FSM", "SAND", "SSRM", "OR", "RGLD", "SA", "TAHO", "IAG", "GFI"
-]
-
 def lambda_handler(event, context):
     try:
         API_KEY = os.environ['ALPHA_VANTAGE_API_KEY']
         items_to_write = []
         
-        for symbol in MINING_SYMBOLS:
+        # Get symbols from event or default to mining stocks
+        symbols = event.get('symbols', [
+            "GOLD", "NEM", "AEM", "KL", "WPM", "AG", "PAAS", "EXK", "HL", "MUX",
+            "CDE", "FSM", "SAND", "SSRM", "OR", "RGLD", "SA", "TAHO", "IAG", "GFI"
+        ])
+        
+        # Handle manual trigger with single symbol
+        if 'symbol' in event:
+            symbols = [event['symbol']]
+        
+        for symbol in symbols:
             # Get company overview
             overview_url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={symbol}&apikey={API_KEY}"
             response = requests.get(overview_url)

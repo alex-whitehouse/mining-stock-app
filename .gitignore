@@ -17,3 +17,8 @@ frontend/node_modules/
 backend/node_modules/
 backend/.aws-sam/
 backend/packaged.yaml
+
+# Ignore boto3 directories
+backend/src/data_api/boto3
+backend/src/data_api/boto3-1.38.41.dist-info
+backend/src/data_api/*/

@@ -1,1 +1,1 @@
-{"statusCode": 500, "body": "Symbol ingest failed: An error occurred (ValidationException) when calling the BatchWriteItem operation: The provided key element does not match the schema"}
+{"errorMessage": "Unable to import module 'app': No module named 'requests'", "errorType": "Runtime.ImportModuleError", "requestId": "", "stackTrace": []}

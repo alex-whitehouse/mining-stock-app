@@ -18,51 +18,110 @@ def lambda_handler(event, context):
     try:
         logger.info(f"Incoming event: {json.dumps(event)}")
         
-        path = event['requestContext']['http']['path']
-        method = event['requestContext']['http']['method']
+        # Extract request details with error handling
+        try:
+            request_context = event['requestContext']
+            http_info = request_context['http']
+            path = http_info['path']
+            method = http_info['method']
+        except KeyError as e:
+            logger.error(f"Missing key in event: {str(e)}")
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'Invalid request structure'})
+            }
         
         # Handle GET /symbols (search endpoint)
         if (path == '/symbols' or path == '/dev/symbols') and method == 'GET':
-            query_params = event.get('queryStringParameters', {})
-            search_query = query_params.get('query', '')
-            
-            # Convert query to lowercase for case-insensitive search
-            if search_query:
-                search_query = search_query.lower()
-            
-            # Setup filter expression if query provided
-            filter_expr = None
-            expr_attr_values = {}
-            expr_attr_names = {}
-            
-            if search_query:
-                # Enhanced search to include sector and industry fields
-                filter_expr = "contains(symbol_lower, :query) or contains(#name, :query) or contains(sector, :query) or contains(industry, :query)"
-                expr_attr_values = {':query': search_query}
-                expr_attr_names = {'#name': 'name'}  # 'name' is reserved word
-            
-            # Perform scan with optional filtering and pagination
-            scan_params = {
-                'FilterExpression': filter_expr,
-                'ExpressionAttributeValues': expr_attr_values,
-                'ExpressionAttributeNames': expr_attr_names
-            }
-            
-            # Remove None values
-            scan_params = {k: v for k, v in scan_params.items() if v is not None}
-            
-            # Perform scan with optional filtering, limited to 50 items
-            scan_params['Limit'] = 50
-            response = symbols_table.scan(**scan_params)
-            items = response.get('Items', [])
-            return {
-                'statusCode': 200,
-                'body': json.dumps(items),
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
+            try:
+                query_params = event.get('queryStringParameters', {})
+                search_query = query_params.get('query', '')
+                
+                # Convert query to lowercase for case-insensitive search
+                # Setup filter expression if query provided
+                filter_expr = None
+                expr_attr_values = {}
+                
+                if search_query:
+                    # Case-insensitive search: convert query to lowercase and search symbol_lower
+                    search_query_lower = search_query.lower()
+                    # Use contains for substring matching
+                    filter_expr = "contains(symbol_lower, :query_lower)"
+                    expr_attr_values = {
+                        ':query_lower': search_query_lower
+                    }
+                
+                # Build scan parameters with pagination support
+                all_items = []
+                scan_params = {}
+                if filter_expr:
+                    scan_params['FilterExpression'] = filter_expr
+                if expr_attr_values:
+                    scan_params['ExpressionAttributeValues'] = expr_attr_values
+                
+                # Log detailed scan parameters for debugging
+                logger.info(f"Symbols table scan parameters: {json.dumps(scan_params)}")
+                logger.info(f"Symbols table name: {symbols_table.table_name}")
+                
+                try:
+                    while True:
+                        response = symbols_table.scan(**scan_params)
+                        items_chunk = response.get('Items', [])
+                        all_items.extend(items_chunk)
+                        
+                        # Stop if we have 50+ items or no more pages
+                        if len(all_items) >= 50 or 'LastEvaluatedKey' not in response:
+                            break
+                            
+                        # Continue to next page
+                        scan_params['ExclusiveStartKey'] = response['LastEvaluatedKey']
+                except Exception as e:
+                    error_msg = f"DynamoDB scan error: {str(e)}"
+                    logger.error(error_msg)
+                    return {
+                        'statusCode': 500,
+                        'body': json.dumps({
+                            'error': 'Database error',
+                            'details': error_msg
+                        })
+                    }
+                
+                # Return up to 50 items
+                items = all_items[:50]
+                
+                # Enhanced debug logging
+                logger.info(f"Search for '{search_query}' (lower: '{search_query_lower}') returned {len(all_items)} matches, showing {len(items)}")
+                if items:
+                    logger.info(f"First item symbol: {items[0].get('symbol')}, symbol_lower: {items[0].get('symbol_lower')}")
+                else:
+                    logger.info("No matching items found in entire table")
+                    # Additional debug: verify table contents
+                    try:
+                        ibm_item = symbols_table.get_item(
+                            Key={'symbol': 'IBM', 'exchange': 'NYSE'}
+                        ).get('Item')
+                        logger.info(f"IBM record exists: {ibm_item is not None}")
+                        if ibm_item:
+                            logger.info(f"IBM symbol_lower: {ibm_item.get('symbol_lower')}")
+                    except Exception as e:
+                        logger.error(f"Error fetching IBM record: {str(e)}")
+                return {
+                    'statusCode': 200,
+                    'body': json.dumps(items),
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    }
                 }
-            }
+            except Exception as e:
+                logger.error(f"Unhandled error in search handler: {str(e)}")
+                return {
+                    'statusCode': 500,
+                    'body': json.dumps({
+                        'error': 'Internal server error',
+                        'details': str(e)
+                    })
+                }
         
         # Handle GET /metrics/{symbol}
         if path.startswith('/metrics/') and method == 'GET':

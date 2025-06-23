@@ -26,14 +26,24 @@ const apiRequest = async (url) => {
 
 
 export const searchSymbols = async (query) => {
+  console.log(`[DEBUG] Searching symbols with query: ${query}`);
   try {
-    // Send query to backend for server-side filtering
-    const response = await api.get('/symbols', {
+    const url = '/symbols';
+    console.log(`[DEBUG] Sending GET request to ${url} with query:`, query);
+    
+    const response = await api.get(url, {
       params: { query }
     });
-    return response.data || [];
+    
+    console.log('[DEBUG] Received response:', response.data);
+    // Handle both array response and object with results property
+    return Array.isArray(response.data) ? response.data : (response.data.results || []);
   } catch (error) {
-    console.error('Error searching symbols:', error);
+    console.error('[DEBUG] Error searching symbols:', error);
+    if (error.response) {
+      console.error('[DEBUG] Response data:', error.response.data);
+      console.error('[DEBUG] Response status:', error.response.status);
+    }
     return [];
   }
 };

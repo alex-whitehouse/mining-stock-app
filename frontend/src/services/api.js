@@ -1,15 +1,63 @@
 import axios from 'axios';
 
+// Create API instance with enhanced logging
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL,
 });
 
-// Add response interceptor
+// Log API base URL for debugging
+console.log(`[API] Using base URL: ${process.env.REACT_APP_API_URL || 'not set'}`);
+
+// Add request interceptor for logging
+api.interceptors.request.use(config => {
+  console.log(`[API] Request: ${config.method.toUpperCase()} ${config.url}`);
+  return config;
+});
+
+// Enhanced response interceptor with error detail preservation
 api.interceptors.response.use(
-  response => response,
+  response => {
+    console.log(`[API] Response: ${response.status} ${response.config.url}`);
+    return response;
+  },
   error => {
-    console.error('API Error:', error);
-    throw error;
+    let errorDetails = 'Network Error';
+    let serverMessage = '';
+    let errorDetailCode = '';
+    
+    if (error.response) {
+      // Server responded with non-2xx status
+      errorDetails = `Server Error: ${error.response.status}`;
+      console.error(`[API] Response Error: ${error.response.status} ${error.config.url}`, error.response.data);
+      
+      // Extract server error message and detail code
+      if (error.response.data) {
+        serverMessage = error.response.data.error || '';
+        errorDetailCode = error.response.data.error_detail || '';
+      }
+    } else if (error.request) {
+      // Request was made but no response received
+      errorDetails = 'No Response from Server';
+      console.error('[API] Network Error: No response received', error.request);
+      errorDetailCode = 'NetworkError';
+    } else {
+      // Something happened in setting up the request
+      errorDetails = `Request Error: ${error.message}`;
+      console.error('[API] Request Setup Error:', error.message);
+      errorDetailCode = 'RequestSetupError';
+    }
+    
+    // Enhance error object with custom details
+    const enhancedError = new Error(
+      serverMessage || errorDetails
+    );
+    enhancedError.details = errorDetails;
+    enhancedError.serverMessage = serverMessage;
+    enhancedError.detailCode = errorDetailCode;
+    enhancedError.config = error.config;
+    enhancedError.response = error.response;
+    
+    throw enhancedError;
   }
 );
 
@@ -19,46 +67,45 @@ const apiRequest = async (url) => {
     const response = await api.get(url);
     return response.data || null;
   } catch (error) {
-    console.error(`API request failed: ${url}`, error);
-    return null;
+    console.error(`[API] Request failed: ${url}`, error);
+    throw error; // Re-throw for caller to handle
   }
 };
 
 
 export const searchSymbols = async (query) => {
-  console.log(`[DEBUG] Searching symbols with query: ${query}`);
+  console.log(`[API] Searching symbols: ${query}`);
   try {
-    const url = '/symbols';
-    console.log(`[DEBUG] Sending GET request to ${url} with query:`, query);
-    
-    const response = await api.get(url, {
-      params: { query }
-    });
-    
-    console.log('[DEBUG] Received response:', response.data);
+    const response = await api.get('/symbols', { params: { query } });
     // Handle both array response and object with results property
     return Array.isArray(response.data) ? response.data : (response.data.results || []);
   } catch (error) {
-    console.error('[DEBUG] Error searching symbols:', error);
-    if (error.response) {
-      console.error('[DEBUG] Response data:', error.response.data);
-      console.error('[DEBUG] Response status:', error.response.status);
-    }
+    console.error('[API] Symbol search failed:', error);
     return [];
   }
 };
 
-export const getStockMetrics = async (symbol) => {
-  return apiRequest(`/metrics/${symbol}`);
-};
-
 export const getCompanyOverview = async (symbol) => {
-  return apiRequest(`/overview/${symbol}`);
+  try {
+    return await apiRequest(`/overview?symbol=${symbol}`);
+  } catch (error) {
+    console.error(`[API] Failed to get overview for ${symbol}`, error);
+    throw error; // Propagate to caller for UI handling
+  }
+};
+export const getFinancials = async (symbol) => {
+  try {
+    const data = await apiRequest(`/financials?symbol=${symbol}`);
+    return {
+      incomeStatement: data.incomeStatement,
+      balanceSheet: data.balanceSheet
+    };
+  } catch (error) {
+    console.error(`[API] Failed to get financials for ${symbol}`, error);
+    return null;
+  }
 };
 
-export const getFinancials = async (symbol) => {
-  return apiRequest(`/financials/${symbol}`);
-};
 
 export const getNews = async (symbol) => {
   // In a real app, this would call your news endpoint

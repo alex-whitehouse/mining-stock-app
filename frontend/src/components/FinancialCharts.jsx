@@ -2,20 +2,24 @@ import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const FinancialCharts = ({ financials }) => {
-  // Mock data for demonstration - in a real app, this would come from the API
-  const quarterlyData = [
-    { period: 'Q1 2023', revenue: 45.2, costs: 32.1, net: 8.7 },
-    { period: 'Q2 2023', revenue: 48.7, costs: 33.8, net: 9.2 },
-    { period: 'Q3 2023', revenue: 52.1, costs: 35.4, net: 10.5 },
-    { period: 'Q4 2023', revenue: 55.6, costs: 37.2, net: 11.8 },
-  ];
+  // Extract income statement and balance sheet data
+  const { incomeStatement = [], balanceSheet = [] } = financials;
   
-  const annualData = [
-    { year: 2020, revenue: 162.4, net: 28.5 },
-    { year: 2021, revenue: 178.9, net: 32.1 },
-    { year: 2022, revenue: 195.3, net: 38.7 },
-    { year: 2023, revenue: 217.6, net: 46.3 },
-  ];
+  // Prepare income statement chart data
+  const incomeData = incomeStatement.slice(0, 4).map(report => ({
+    period: `Q${report.fiscalQuarter} ${report.fiscalYear}`,
+    revenue: report.totalRevenue,
+    netIncome: report.netIncome,
+    operatingExpenses: report.operatingExpenses
+  })).reverse(); // Show oldest first
+  
+  // Prepare balance sheet chart data
+  const balanceData = balanceSheet.slice(0, 4).map(report => ({
+    period: `Q${report.fiscalQuarter} ${report.fiscalYear}`,
+    assets: report.totalAssets,
+    liabilities: report.totalLiabilities,
+    equity: report.totalShareholderEquity
+  })).reverse(); // Show oldest first
   
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
@@ -25,41 +29,42 @@ const FinancialCharts = ({ financials }) => {
       
       <div className="p-4 space-y-6">
         <div>
-          <h4 className="text-sm font-medium text-gray-500 mb-2">Quarterly Results (Millions USD)</h4>
+          <h4 className="text-sm font-medium text-gray-500 mb-2">Income Statement (Millions USD)</h4>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={quarterlyData}
+                data={incomeData}
                 margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="period" />
                 <YAxis />
-                <Tooltip formatter={(value) => [`$${value}M`, '']} />
+                <Tooltip formatter={(value) => [`$${value.toFixed(1)}M`, '']} />
                 <Legend />
                 <Bar dataKey="revenue" fill="#F59E0B" name="Revenue" />
-                <Bar dataKey="costs" fill="#EF4444" name="Costs" />
-                <Bar dataKey="net" fill="#10B981" name="Net Income" />
+                <Bar dataKey="netIncome" fill="#10B981" name="Net Income" />
+                <Bar dataKey="operatingExpenses" fill="#EF4444" name="Operating Expenses" />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
         
         <div>
-          <h4 className="text-sm font-medium text-gray-500 mb-2">Annual Trends (Millions USD)</h4>
+          <h4 className="text-sm font-medium text-gray-500 mb-2">Balance Sheet (Millions USD)</h4>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={annualData}
+                data={balanceData}
                 margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="year" />
+                <XAxis dataKey="period" />
                 <YAxis />
-                <Tooltip formatter={(value) => [`$${value}M`, '']} />
+                <Tooltip formatter={(value) => [`$${value.toFixed(1)}M`, '']} />
                 <Legend />
-                <Bar dataKey="revenue" fill="#F59E0B" name="Revenue" />
-                <Bar dataKey="net" fill="#10B981" name="Net Income" />
+                <Bar dataKey="assets" fill="#3B82F6" name="Total Assets" />
+                <Bar dataKey="liabilities" fill="#EF4444" name="Total Liabilities" />
+                <Bar dataKey="equity" fill="#10B981" name="Shareholder Equity" />
               </BarChart>
             </ResponsiveContainer>
           </div>

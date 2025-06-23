@@ -61,17 +61,6 @@ Resources:
           Projection:
             ProjectionType: ALL
 
-  MetricsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub MiningMetrics-${Environment}
-      AttributeDefinitions:
-        - AttributeName: symbol
-          AttributeType: S
-      KeySchema:
-        - AttributeName: symbol
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
 
   # Cognito User Pool
   UserPool:
@@ -105,21 +94,6 @@ Resources:
       AllowedOAuthFlows: [code]
       AllowedOAuthScopes: [email, openid, profile]
       
-  WatchlistTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub Watchlists-${Environment}
-      AttributeDefinitions:
-        - AttributeName: userId
-          AttributeType: S
-        - AttributeName: symbol
-          AttributeType: S
-      KeySchema:
-        - AttributeName: userId
-          KeyType: HASH
-        - AttributeName: symbol
-          KeyType: RANGE
-      BillingMode: PAY_PER_REQUEST
 
   CompanyOverviewTable:
     Type: AWS::DynamoDB::Table
@@ -132,98 +106,8 @@ Resources:
         - AttributeName: symbol
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
-  # Watchlist Lambda Functions
-  WatchlistAddFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub WatchlistAdd-${Environment}
-      CodeUri: src/watchlist/
-      Handler: add.lambda_handler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref WatchlistTable
-        - Statement:
-            - Effect: Allow
-              Action: 
-                - cognito-idp:AdminGetUser
-              Resource: !GetAtt UserPool.Arn
-      Environment:
-        Variables:
-          WATCHLIST_TABLE: !Ref WatchlistTable
-          USER_POOL_ID: !Ref UserPool
-          COGNITO_REGION: !Ref AWS::Region
-      Events:
-        Api:
-          Type: HttpApi
-          Properties:
-            Path: /watchlist
-            Method: POST  
 
-  WatchlistGetFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub WatchlistGet-${Environment}
-      CodeUri: src/watchlist/
-      Handler: get.lambda_handler
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref WatchlistTable
-        - Statement:
-            - Effect: Allow
-              Action: 
-                - cognito-idp:AdminGetUser
-              Resource: !GetAtt UserPool.Arn
-      Environment:
-        Variables:
-          WATCHLIST_TABLE: !Ref WatchlistTable
-          USER_POOL_ID: !Ref UserPool
-          COGNITO_REGION: !Ref AWS::Region
-      Events:
-        Api:
-          Type: HttpApi
-          Properties:
-            Path: /watchlist
-            Method: GET
-
-  WatchlistRemoveFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub WatchlistRemove-${Environment}
-      CodeUri: src/watchlist/
-      Handler: remove.lambda_handler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref WatchlistTable
-        - Statement:
-            - Effect: Allow
-              Action: 
-                - cognito-idp:AdminGetUser
-              Resource: !GetAtt UserPool.Arn
-      Environment:
-        Variables:
-          WATCHLIST_TABLE: !Ref WatchlistTable
-          USER_POOL_ID: !Ref UserPool
-          COGNITO_REGION: !Ref AWS::Region
-      Events:
-        Api:
-          Type: HttpApi
-          Properties:
-            Path: /watchlist
-            Method: DELETE
-
-  # Add OPTIONS method handlers for CORS
-  WatchlistOptionsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub WatchlistOptions-${Environment}
-      CodeUri: src/watchlist/
-      Handler: options.lambda_handler
-      Events:
-        Api:
-          Type: HttpApi
-          Properties:
-            Path: /watchlist
-            Method: OPTIONS
+  
 
   # Lambda Functions
   SymbolIngestFunction:

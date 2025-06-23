@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  getStockMetrics, 
-  getFinancials, 
+import {
+  getFinancials,
   getNews,
   getCompanyOverview
 } from './services/api';
-import { 
-  getWatchlist, 
-  addToWatchlist, 
-  removeFromWatchlist 
+import {
+  getWatchlist,
+  addToWatchlist,
+  removeFromWatchlist
 } from './services/watchlist';
 import { getCurrentUser, signOut } from './services/auth';
 import Dashboard from './components/Dashboard';
@@ -20,7 +19,11 @@ import './index.css';
 function App() {
   const [selectedStock, setSelectedStock] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [apiErrors, setApiErrors] = useState({
+    financials: null,
+    news: null,
+    overview: null
+  });
   const [user, setUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [watchlist, setWatchlist] = useState([]);
@@ -66,37 +69,70 @@ function App() {
 
   const handleStockSelect = async (stock) => {
     setLoading(true);
-    setError(null);
+    setApiErrors({
+      financials: null,
+      news: null,
+      overview: null
+    });
+    
+    setSelectedStock({
+      info: stock,
+      financials: null,
+      news: null,
+      overview: null
+    });
     
     try {
-      setSelectedStock({
-        info: stock,
-        metrics: null,
-        financials: null,
-        news: null,
-        overview: null
-      });
-      
-      // Fetch all data in parallel
-      const [metrics, financials, news, overview] = await Promise.all([
-        getStockMetrics(stock.symbol),
-        getFinancials(stock.symbol),
-        getNews(stock.symbol),
-        getCompanyOverview(stock.symbol)
+      // Fetch all data in parallel with error handling per endpoint
+      const [financials, news, overview] = await Promise.all([
+        getFinancials(stock.symbol).catch(err => {
+          setApiErrors(prev => ({...prev, financials: err.message}));
+          return null;
+        }),
+        getNews(stock.symbol).catch(err => {
+          setApiErrors(prev => ({...prev, news: err.message}));
+          return null;
+        }),
+        getCompanyOverview(stock.symbol).catch(err => {
+          setApiErrors(prev => ({...prev, overview: err.message}));
+          return null;
+        })
       ]);
       
       setSelectedStock({
         info: stock,
-        metrics,
         financials,
         news,
         overview
       });
     } catch (err) {
-      setError('Failed to load stock data. Please try again.');
-      console.error(err);
+      console.error('Unexpected error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const retryFinancials = async () => {
+    if (!selectedStock) return;
+    
+    setApiErrors(prev => ({...prev, financials: null}));
+    try {
+      const financials = await getFinancials(selectedStock.info.symbol);
+      setSelectedStock(prev => ({...prev, financials}));
+    } catch (err) {
+      setApiErrors(prev => ({...prev, financials: err.message}));
+    }
+  };
+
+  const retryOverview = async () => {
+    if (!selectedStock) return;
+    
+    setApiErrors(prev => ({...prev, overview: null}));
+    try {
+      const overview = await getCompanyOverview(selectedStock.info.symbol);
+      setSelectedStock(prev => ({...prev, overview}));
+    } catch (err) {
+      setApiErrors(prev => ({...prev, overview: err.message}));
     }
   };
 
@@ -188,18 +224,18 @@ function App() {
               </div>
             )}
             
-            {error && (
-              <div className="mt-8 bg-red-50 border-l-4 border-red-500 p-4">
-                <p className="text-red-700">{error}</p>
-              </div>
-            )}
+            {/* Individual API errors will be handled in Dashboard component */}
             
             {selectedStock && !loading && (
-              <Dashboard 
-                stock={selectedStock} 
+              <Dashboard
+                stock={selectedStock}
                 watchlist={watchlist}
                 onAddToWatchlist={handleAddToWatchlist}
                 onRemoveFromWatchlist={handleRemoveFromWatchlist}
+                financialsError={apiErrors.financials}
+                overviewError={apiErrors.overview}
+                onRetryFinancials={retryFinancials}
+                onRetryOverview={retryOverview}
               />
             )}
             
